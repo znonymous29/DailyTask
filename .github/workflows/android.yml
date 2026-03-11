@@ -1,0 +1,67 @@
+name: Android Release
+
+# 仅在推送 v* tag 时构建并发布 Release（推送 main 仅构建不发布）
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+env:
+  JAVA_VERSION: "17"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx2g"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: wrapper
+
+      - name: Build Release APK
+        run: ./gradlew assembleDailyRelease
+        # 项目使用 product flavor "daily"，任务名为 assembleDailyRelease
+
+      - name: Sign APK
+        id: sign_app
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/daily/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+
+      - name: Rename APK for Release
+        run: |
+          SIGNED="${{ steps.sign_app.outputs.signedReleaseFile }}"
+          if [ -f "$SIGNED" ]; then
+            mv "$SIGNED" "DailyTask_${GITHUB_REF_NAME}.apk"
+          fi
+
+      # 仅在有 tag 时创建/更新 GitHub Release 并上传 APK
+      - name: Create Release and Upload APK
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "DailyTask_*.apk"
+          token: ${{ github.token }}
+          generateReleaseNotes: true
