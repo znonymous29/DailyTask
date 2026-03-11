@@ -34,6 +34,9 @@ jobs:
         with:
           gradle-version: wrapper
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       - name: Build Release APK
         run: ./gradlew assembleDailyRelease
         # 项目使用 product flavor "daily"，任务名为 assembleDailyRelease
