@@ -15,6 +15,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 使用环境 "android"，否则该环境下的 Secrets 不会注入
+    environment: android
     permissions:
       contents: write
 
@@ -40,6 +42,35 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleDailyRelease
         # 项目使用 product flavor "daily"，任务名为 assembleDailyRelease
+
+      - name: Verify signing secrets and keystore
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SIGNING_KEY:-}" ] || [ -z "${ALIAS:-}" ] || [ -z "${KEY_STORE_PASSWORD:-}" ] || [ -z "${KEY_PASSWORD:-}" ]; then
+            echo "Missing signing secrets. Please configure SIGNING_KEY, ALIAS, KEY_STORE_PASSWORD, KEY_PASSWORD in GitHub Actions secrets."
+            exit 1
+          fi
+
+          echo "$SIGNING_KEY" | base64 -d > /tmp/signingKey.jks
+
+          # Validate keystore is readable (JKS or PKCS12). This gives clearer errors than apksigner.
+          if keytool -list -keystore /tmp/signingKey.jks -storepass "$KEY_STORE_PASSWORD" >/dev/null 2>&1; then
+            echo "Keystore OK (default storetype)."
+          elif keytool -list -storetype JKS -keystore /tmp/signingKey.jks -storepass "$KEY_STORE_PASSWORD" >/dev/null 2>&1; then
+            echo "Keystore OK (JKS)."
+          elif keytool -list -storetype PKCS12 -keystore /tmp/signingKey.jks -storepass "$KEY_STORE_PASSWORD" >/dev/null 2>&1; then
+            echo "Keystore OK (PKCS12)."
+          else
+            echo "Keystore validation failed. Your SIGNING_KEY may not be a base64 of a .jks/.p12 file, or password is wrong."
+            exit 1
+          fi
 
       - name: Sign APK
         id: sign_app
