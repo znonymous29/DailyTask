@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.room.Room.databaseBuilder
 import com.pengxh.daily.app.sqlite.DailyTaskDataBase
 import com.pengxh.daily.app.utils.LogFileManager
+import com.pengxh.daily.app.utils.HolidayManager
 import com.pengxh.kt.lite.utils.SaveKeyValues
 import com.tencent.bugly.crashreport.CrashReport
 
