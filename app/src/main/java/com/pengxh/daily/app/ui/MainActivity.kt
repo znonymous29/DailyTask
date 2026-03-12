@@ -25,6 +25,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.github.gzuliyujiang.wheelpicker.widget.TimeWheelLayout
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -38,6 +39,7 @@ import com.pengxh.daily.app.adapter.DailyTaskAdapter
 import com.pengxh.daily.app.databinding.ActivityMainBinding
 import com.pengxh.daily.app.event.FloatViewTimerEvent
 import com.pengxh.daily.app.extensions.backToMainActivity
+import com.pengxh.daily.app.extensions.buildContent
 import com.pengxh.daily.app.extensions.convertToTimeEntity
 import com.pengxh.daily.app.extensions.diffCurrent
 import com.pengxh.daily.app.extensions.getTaskIndex
@@ -55,6 +57,7 @@ import com.pengxh.daily.app.utils.HolidayManager
 import com.pengxh.daily.app.utils.LogFileManager
 import com.pengxh.daily.app.utils.MessageType
 import com.pengxh.daily.app.utils.WatermarkDrawable
+import com.pengxh.daily.app.vm.MessageViewModel
 import com.pengxh.kt.lite.adapter.NormalRecyclerAdapter
 import com.pengxh.kt.lite.base.KotlinBaseActivity
 import com.pengxh.kt.lite.divider.RecyclerViewItemOffsets
@@ -108,6 +111,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
     private val marginOffset by lazy { 16.dp2px(this) }
     private var isTaskStarted = false
     private var isRefresh = false
+    private val messageViewModel by lazy { ViewModelProvider(this)[MessageViewModel::class.java] }
     private val emailManager by lazy { EmailManager(this) }
     private var timeoutTimer: CountDownTimer? = null
     private val gson by lazy { Gson() }
@@ -135,10 +139,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                             startExecuteTask()
                         } else {
                             LogFileManager.writeLog("今天是休息日，重置任务但不启动")
-                            emailManager.sendEmail(
+                            sendChannelMessage(
                                 "任务状态通知",
-                                "今天是休息日，任务已重置但不会自动启动",
-                                false
+                                "今天是休息日，任务已重置但不会自动启动"
                             )
                         }
                     }
@@ -151,10 +154,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                         if (!isTaskStarted) {
                             startExecuteTask()
                         } else {
-                            emailManager.sendEmail(
+                            sendChannelMessage(
                                 "启动任务通知",
                                 "任务启动失败，任务已在运行中，请勿重复启动",
-                                false
                             )
                         }
                     }
@@ -163,10 +165,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                         if (isTaskStarted) {
                             stopExecuteTask()
                         } else {
-                            emailManager.sendEmail(
+                            sendChannelMessage(
                                 "停止任务通知",
                                 "任务停止失败，任务已经停止，请勿重复停止",
-                                false
                             )
                         }
                     }
@@ -377,7 +378,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                 backToMainActivity()
 
                 LogFileManager.writeLog("未收到打卡成功通知，发送异常日志邮件")
-                emailManager.sendEmail(null, "", false)
+                sendChannelMessage("打卡异常通知", "未收到打卡成功通知，请检查打卡状态")
             }
         }
         timeoutTimer?.start()
@@ -522,10 +523,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
         // 检查今天是否为工作日
         if (!HolidayManager.isTodayWorkday()) {
             "今天是休息日，不执行打卡任务".show(this)
-            emailManager.sendEmail(
+            sendChannelMessage(
                 "任务启动通知",
-                "今天是休息日，任务启动被跳过",
-                false
+                "今天是休息日，任务启动被跳过"
             )
             return
         }
@@ -543,7 +543,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
         binding.executeTaskButton.text = "停止"
 
         // 发送邮件通知
-        emailManager.sendEmail("启动任务通知", "任务启动成功，请注意下次打卡时间", false)
+        sendChannelMessage("启动任务通知", "任务启动成功，请注意下次打卡时间")
     }
 
     /**
@@ -569,7 +569,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                     dailyTaskAdapter.updateCurrentTaskState(-1)
                     countDownTimerService?.updateDailyTaskState()
 
-                    emailManager.sendEmail("任务状态通知", "今天是休息日，无任务执行", false)
+                    sendChannelMessage("任务状态通知", "今天是休息日，无任务执行")
                     return
                 }
 
@@ -584,7 +584,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                     dailyTaskAdapter.updateCurrentTaskState(-1)
                     countDownTimerService?.updateDailyTaskState()
 
-                    emailManager.sendEmail("任务状态通知", "今日任务已全部执行完毕", false)
+                    sendChannelMessage("任务状态通知", "今日任务已全部执行完毕")
                     return
                 }
 
@@ -605,10 +605,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                 val pair = task.diffCurrent()
                 dailyTaskAdapter.updateCurrentTaskState(index, pair.first)
                 val diff = pair.second
-                emailManager.sendEmail(
+                sendChannelMessage(
                     "任务执行通知",
                     "准备执行第 $taskIndex 个任务，计划时间：${task.time}，实际时间: ${pair.first}",
-                    false
                 )
                 countDownTimerService?.startCountDown(taskIndex, diff)
             } catch (e: IndexOutOfBoundsException) {
@@ -643,7 +642,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
         binding.executeTaskButton.text = "启动"
 
         // 发送通知
-        emailManager.sendEmail("停止任务通知", "任务停止成功，请及时打开下次任务", false)
+        sendChannelMessage("停止任务通知", "任务停止成功，请及时打开下次任务")
     }
 
     private val itemComparator = object : NormalRecyclerAdapter.ItemComparator<DailyTaskBean> {
@@ -821,6 +820,8 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                         dailyTaskAdapter.refresh(taskBeans)
 
                         // 写入配置
+                        SaveKeyValues.putValue(Constant.WX_WEB_HOOK_KEY, config.wxKey)
+
                         val email = config.emailConfig
                         if (email != null) {
                             DatabaseWrapper.insertConfig(
@@ -830,14 +831,17 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                                 email.title
                             )
                         }
+
                         SaveKeyValues.putValue(
                             Constant.GESTURE_DETECTOR_KEY,
                             config.isDetectGesture
                         )
+
                         SaveKeyValues.putValue(
                             Constant.BACK_TO_HOME_KEY,
                             config.isBackToHome
                         )
+
                         SaveKeyValues.putValue(
                             Constant.RESET_TIME_KEY,
                             config.resetTime
@@ -856,10 +860,12 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                             Constant.TASK_AUTO_START_KEY,
                             config.isAutoStart
                         )
+
                         SaveKeyValues.putValue(
                             Constant.RANDOM_TIME_KEY,
                             config.isRandomTime
                         )
+
                         SaveKeyValues.putValue(
                             Constant.RANDOM_MINUTE_RANGE_KEY,
                             config.timeRange
@@ -890,5 +896,29 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
             BroadcastManager.getDefault().unregisterReceiver(this, it)
         }
         EventBus.getDefault().unregister(this)
+    }
+
+    private fun sendChannelMessage(title: String, content: String) {
+        val text = content.buildContent(this)
+        val type = SaveKeyValues.getValue(Constant.CHANNEL_TYPE_KEY, -1) as Int
+        when (type) {
+            0 -> {
+                // 企业微信
+                val message = """
+            标题：$title
+            内容：${content.buildContent(context)}
+        """.trimIndent()
+                messageViewModel.sendMessage(message, {}, {}, {})
+            }
+
+            1 -> {
+                // QQ邮箱
+                emailManager.sendEmail(title, text, false)
+            }
+
+            else -> {
+                Log.d(kTag, "sendChannelMessage: 消息渠道不支持")
+            }
+        }
     }
 }
