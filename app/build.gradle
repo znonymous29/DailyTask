@@ -46,7 +46,7 @@ android {
         }
     }
 
-    GString id = "com.alibaba.android.${createRandomCode()}"
+    def id = "com.alibaba.android.${createRandomCode()}"
     productFlavors {
         daily {
             applicationId = id
