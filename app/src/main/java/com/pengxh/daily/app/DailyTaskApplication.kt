@@ -39,5 +39,8 @@ class DailyTaskApplication : Application() {
         dataBase = databaseBuilder(this, DailyTaskDataBase::class.java, "DailyTask.db")
             .allowMainThreadQueries()
             .build()
+
+        // 初始化节假日管理器
+        HolidayManager.initialize(this)
     }
 }

@@ -15,6 +15,7 @@ import com.pengxh.daily.app.R
 import com.pengxh.daily.app.utils.BroadcastManager
 import com.pengxh.daily.app.utils.Constant
 import com.pengxh.daily.app.utils.EmailManager
+import com.pengxh.daily.app.utils.HolidayManager
 import com.pengxh.daily.app.utils.LogFileManager
 import com.pengxh.daily.app.utils.MessageType
 import com.pengxh.kt.lite.utils.SaveKeyValues
@@ -71,12 +72,17 @@ class ForegroundRunningService : Service() {
         if (!isTaskReset) {
             var message: String
             if (SaveKeyValues.getValue(Constant.TASK_AUTO_START_KEY, true) as Boolean) {
-                BroadcastManager.getDefault().sendBroadcast(
-                    this, MessageType.RESET_DAILY_TASK.action
-                )
-                message = "到达任务计划时间，重置每日任务。"
+                // 检查今天是否为工作日
+                if (HolidayManager.isTodayWorkday()) {
+                    BroadcastManager.getDefault().sendBroadcast(
+                        this, MessageType.RESET_DAILY_TASK.action
+                    )
+                    message = "到达任务计划时间，重置每日任务。"
+                } else {
+                    message = "到达任务计划时间，但今天是休息日，不自动启动任务。"
+                }
             } else {
-                message = "每日任务已手动停止，不再自动重置！如需恢复，可通过远程消息发送【】指令。"
+                message = "每日任务已手动停止，不再自动重置！如需恢复，可通过远程消息发送【开始循环】指令。"
             }
             LogFileManager.writeLog(message)
             emailManager.sendEmail("循环任务状态通知", message, false)

@@ -51,6 +51,7 @@ import com.pengxh.daily.app.utils.BroadcastManager
 import com.pengxh.daily.app.utils.Constant
 import com.pengxh.daily.app.utils.DailyTask
 import com.pengxh.daily.app.utils.EmailManager
+import com.pengxh.daily.app.utils.HolidayManager
 import com.pengxh.daily.app.utils.LogFileManager
 import com.pengxh.daily.app.utils.MessageType
 import com.pengxh.daily.app.utils.WatermarkDrawable
@@ -129,7 +130,17 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
 
                     MessageType.RESET_DAILY_TASK -> {
                         Log.d(kTag, "onReceive: 重置每日任务")
-                        startExecuteTask()
+                        // 检查今天是否为工作日
+                        if (HolidayManager.isTodayWorkday()) {
+                            startExecuteTask()
+                        } else {
+                            LogFileManager.writeLog("今天是休息日，重置任务但不启动")
+                            emailManager.sendEmail(
+                                "任务状态通知",
+                                "今天是休息日，任务已重置但不会自动启动",
+                                false
+                            )
+                        }
                     }
 
                     MessageType.UPDATE_RESET_TICK_TIME -> {
@@ -508,6 +519,17 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
      * 启动任务
      * */
     private fun startExecuteTask() {
+        // 检查今天是否为工作日
+        if (!HolidayManager.isTodayWorkday()) {
+            "今天是休息日，不执行打卡任务".show(this)
+            emailManager.sendEmail(
+                "任务启动通知",
+                "今天是休息日，任务启动被跳过",
+                false
+            )
+            return
+        }
+
         LogFileManager.writeLog("开始执行每日任务")
         // 更新状态标志
         isTaskStarted = true
@@ -530,6 +552,27 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
     private val dailyTaskRunnable = object : Runnable {
         override fun run() {
             try {
+                // 检查今天是否为工作日
+                if (!HolidayManager.isTodayWorkday()) {
+                    LogFileManager.writeLog("今天是休息日，跳过所有任务执行")
+                    mainHandler.removeCallbacks(this)
+
+                    // 停止任务执行状态
+                    isTaskStarted = false
+                    binding.executeTaskButton.setIconResource(R.mipmap.ic_start)
+                    binding.executeTaskButton.setIconTintResource(R.color.ios_green)
+                    binding.executeTaskButton.text = "启动"
+
+                    binding.tipsView.text = "今天是休息日，无任务执行"
+                    binding.tipsView.setTextColor(R.color.red.convertColor(context))
+
+                    dailyTaskAdapter.updateCurrentTaskState(-1)
+                    countDownTimerService?.updateDailyTaskState()
+
+                    emailManager.sendEmail("任务状态通知", "今天是休息日，无任务执行", false)
+                    return
+                }
+
                 val index = taskBeans.getTaskIndex()
                 if (index == -1) {
                     LogFileManager.writeLog("今日任务已全部执行完毕")

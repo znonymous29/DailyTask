@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"E:\\\\Self\\\\DailyTask\" && ./gradlew compileDebugKotlin 2>&1 | head -50)"
+    ]
+  }
+}
