@@ -40,8 +40,8 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build Release APK
-        run: ./gradlew assembleDailyRelease
-        # 项目使用 product flavor "daily"，任务名为 assembleDailyRelease
+        run: ./gradlew :app:assembleRelease
+        # 目前 app/build.gradle 未启用 productFlavors，因此只有 assembleRelease / assembleDebug
 
       - name: Verify signing secrets and keystore
         shell: bash
@@ -76,7 +76,7 @@ jobs:
         id: sign_app
         uses: r0adkll/sign-android-release@v1
         with:
-          releaseDirectory: app/build/outputs/apk/daily/release
+          releaseDirectory: app/build/outputs/apk/release
           signingKeyBase64: ${{ secrets.SIGNING_KEY }}
           alias: ${{ secrets.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
